@@ -22,6 +22,7 @@
     "sidebar"
   ],
   "license": "MIT",
+  "author": "cesare",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
