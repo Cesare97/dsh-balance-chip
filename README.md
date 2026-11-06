@@ -102,14 +102,20 @@ The package is a dsh *bundle*: `dsh.bundle.patch` mounts one Loader row, and the
 row's `dsh.client` declaration is what makes the browser bundle part of the Web
 boot graph.
 
-From the profile directory (`~/.dsh/profiles/desktop`):
+From GitHub, in the profile directory (`~/.dsh/profiles/desktop`):
 
 ```sh
-pnpm add link:/absolute/path/to/dsh-balance-chip
+pnpm add github:Cesare97/dsh-balance-chip
 ```
 
 then add the bundle to `package.json` `dsh.profile.bundles` (or install it
 through Settings → Plugins). With HMR enabled the row appears without a restart.
+
+For local development, link the checkout instead:
+
+```sh
+pnpm add link:/absolute/path/to/dsh-balance-chip
+```
 
 ## Layout contract
 
