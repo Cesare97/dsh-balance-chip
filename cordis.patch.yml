@@ -1,0 +1,8 @@
+# dsh bundle layer for dsh-balance-chip.
+#
+# Mounting the Host row is what makes the package a Loader entry, and only
+# Loader entries contribute a browser bundle to the Web boot graph. The Host
+# half is inert (lib/index.js); the sidebar row lives in lib/client.js.
+- insert:
+    - id: balance-chip
+      name: dsh-balance-chip
