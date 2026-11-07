@@ -254,7 +254,7 @@ const zhCopy = {
   currency: '显示币种',
   auto: '自动',
   exchangeRate: '汇率',
-  refreshRate: '刷新汇率',
+  refreshRate: '刷新',
   fxDefault: '默认汇率（未联网）',
   off: '暂停',
   seconds: '秒',
@@ -718,7 +718,7 @@ console.log('\nexchange rate')
 
   const view = test.SettingsView({ settings: state.settings, currency: 'USD', currencies: ['CNY', 'USD'], fx, t, actions: {} })
   check('settings show the live rate', textOf(view).includes('1 CNY = 0.15 USD'), textOf(view))
-  check('settings offer a rate refresh', textOf(view).includes('刷新汇率'), textOf(view))
+  check('settings offer a rate refresh', textOf(view).includes('刷新'), textOf(view))
 }
 
 console.log('\nlanguage')
