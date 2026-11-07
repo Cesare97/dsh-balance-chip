@@ -60,6 +60,8 @@ Clicking the row opens a detail panel:
 - **Currency switch** in Settings: auto (first wallet), CNY, USD, or any other
   currency the account holds. USD is always offered; balances and spend in CNY
   are converted with the cached reference rate. Budgets are kept per currency.
+- **Language switch** in Settings: follow the system, 中文, English, or Italian
+  (Italiano); the choice is stored per plugin and applies immediately.
 - **Exchange rate**: the CNY→USD rate is refreshed weekly (and on demand from
   the Settings tab) through a plain HTTPS GET to the public Frankfurter/ECB
   endpoint. It costs **no model tokens** and the last rate is kept when the
@@ -126,6 +128,7 @@ Preferences live under `dsh-balance-chip/settings/v1`:
 | `budgets.monthly` | monthly budget per currency |
 | `refreshMs` | poll interval: `15000`, `30000`, `60000`, or `0` (paused) |
 | `currency` | explicit display currency, or `null` for the first wallet |
+| `locale` | `zh`, `en`, `it`, or `null` to follow the host language |
 
 Both keys are sanitized on read: unknown versions, malformed budgets, and
 unlisted intervals fall back to defaults instead of breaking the row.
@@ -146,9 +149,9 @@ fallback is 0.15 USD per CNY until the first successful fetch.
 
 ## Budgets, runway, and backups
 
-The panel's **设置** tab edits the display currency, budgets, and the refresh
-interval, shows the cached exchange rate with a manual **刷新汇率** button, and
-holds the local data tools:
+The panel's **设置** tab edits the display currency, budgets, the UI language,
+and the refresh interval, shows the cached exchange rate with a manual
+**刷新汇率** button, and holds the local data tools:
 
 - **Export JSON** downloads `dsh-balance-chip-YYYY-MM-DD.json`, containing the
   ledger and preferences. Use it to move statistics between machines or to keep
@@ -210,8 +213,9 @@ Both halves are plain JavaScript with no build step:
 
 An offline check drives `apply`, slot registration, the row, the panel, the
 settings form, the ledger, budgets, runway, currency selection, exchange-rate
-conversion, and CSV/JSON round-trips with stubbed `window`/`document`/React, so
-formatting, attribution, and state paths are verifiable without a browser:
+conversion, language switching, and CSV/JSON round-trips with
+stubbed `window`/`document`/React, so formatting, attribution, and state paths
+are verifiable without a browser:
 
 ```sh
 node scripts/check.mjs

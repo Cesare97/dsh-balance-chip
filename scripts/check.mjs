@@ -657,7 +657,7 @@ console.log('\ncurrency selection')
   })
   check('settings render the currency picker', textOf(view).includes('显示币种'), textOf(view))
   const selects = elementsOf(view).filter((node) => node.type === 'select')
-  check('currency picker preselects the stored value', selects[0].props.value === 'USD', String(selects[0].props.value))
+  check('currency picker preselects the stored value', selects[1].props.value === 'USD', String(selects[1].props.value))
 }
 
 console.log('\nrunway over spending days')
@@ -719,6 +719,38 @@ console.log('\nexchange rate')
   const view = test.SettingsView({ settings: state.settings, currency: 'USD', currencies: ['CNY', 'USD'], fx, t, actions: {} })
   check('settings show the live rate', textOf(view).includes('1 CNY = 0.15 USD'), textOf(view))
   check('settings offer a rate refresh', textOf(view).includes('刷新汇率'), textOf(view))
+}
+
+console.log('\nlanguage')
+{
+  const { exports, registrations } = boot(async () => ready([{ currency: 'CNY', balance: '5' }]))
+  await settle()
+  const registration = registrations[0]
+  const { actions } = registration.options.inject()
+
+  check('defaults to the host language', textOf(renderRow(registration, true)).includes('余额'), textOf(renderRow(registration, true)))
+  actions.setLocale('en')
+  check('switches to English', textOf(renderRow(registration, true)).includes('Balance'), textOf(renderRow(registration, true)))
+  actions.setLocale('it')
+  const italian = textOf(renderRow(registration, true))
+  check('switches to Italian', italian.includes('Saldo') && italian.includes('Oggi'), italian)
+  actions.setLocale('fr')
+  check('ignores an unknown language', textOf(renderRow(registration, true)).includes('余额'), textOf(renderRow(registration, true)))
+
+  check('keeps a supported language', exports.__test.buildSettings({ v: 1, locale: 'it' }).locale === 'it')
+  check('drops an unsupported language', exports.__test.buildSettings({ v: 1, locale: 'fr' }).locale === null)
+
+  const view = exports.__test.SettingsView({
+    settings: { ...exports.__test.emptySettings(), locale: 'it' },
+    currency: 'CNY',
+    currencies: ['CNY', 'USD'],
+    fx: exports.__test.emptyFx(),
+    t,
+    actions: {},
+  })
+  const selects = elementsOf(view).filter((node) => node.type === 'select')
+  check('language picker preselects the stored value', selects[0].props.value === 'it', String(selects[0].props.value))
+  check('language picker offers Italian', textOf(view).includes('Italiano'), textOf(view))
 }
 
 console.log('')
