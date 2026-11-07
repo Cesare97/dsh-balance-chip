@@ -1,233 +1,147 @@
 # dsh-balance-chip-cesare
 
-A DeepSeek Harness (dsh) plugin that keeps the account balance, the granted
-balance, and spend statistics in the sidebar, directly above **Settings**.
-It also tracks advisory daily/monthly budgets, estimates how many days the
-balance will last, switches the display currency (including CNY↔USD conversion
-with a weekly reference rate), and can export or restore the local ledger.
+[中文](#中文) | [English](#english) | [Italiano](#italiano)
 
-```
-┌─────────────────────────┐
-│  … sessions …           │
-│                         │
-│  余额            ¥10.34 │  ← this row
-│  赠送 ¥2.00    今日 ¥1.23│
-│  ⚙ Settings             │
-└─────────────────────────┘
-```
+---
 
-Clicking the row opens a detail panel:
+## 中文
 
-```
-┌──────────────────────────────┐
-│ 余额与消耗         [设置][刷新] │
-│ 余额                 ¥10.34   │
-│ 赠送余额              ¥2.00   │
-│ 可用天数              约 8 天 │
-│ ──────────────────────────── │
-│ 今日消耗              ¥1.23   │
-│ ¥1.23 / ¥5.00          25%   │
-│ ▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░  │
-│ 本月消耗             ¥12.40   │
-│ 本次会话              ¥0.45   │
-│ ──────────────────────────── │
-│ 近 7 天                       │
-│  ▁  ▃  ▅  ▂  ▁  ▁  ▇        │
-│ 10/31 …           昨日   今日 │
-│ ──────────────────────────── │
-│ 会话消耗                      │
-│ 重构插件包             ¥0.78  │
-│ 余额统计               ¥0.45  │
-│ ──────────────────────────── │
-│ 最近任务                      │
-│ 14:32 · 1m 20s 余额统计 ¥0.12 │
-│ 14:05 · 42s 重构插件包  ¥0.08 │
-└──────────────────────────────┘
-```
+DeepSeek Harness（DSH）侧栏余额与消耗插件，固定在 **设置** 上方显示。除了余额和统计，还提供预算、可用天数、多币种换算、7 天会话明细、本地备份与导入。
 
-## What it shows
+### 功能
 
-- **Topped-up balance** (`normal_wallets`) and **granted balance**
-  (`bonus_wallets`), formatted the way Platform's own account page does
-  (`¥0.00`, `<¥0.01`, grouped thousands, truncated sub-cent precision).
-- **Today's spend** in the row; per-day, per-session, and per-task figures in
-  the panel, plus a 7-day strip and a running month total.
-- **Budgets** (daily and monthly, per display currency) with a progress bar;
-  over-budget figures turn red in both the panel and the row.
-- **Runway**: available balance divided by the average spend of the days that
-  actually spent money in the last seven complete days, shown as an
-  approximate number of days (five spending days totalling ¥4 means ¥0.80/day).
-- **Currency switch** in Settings: auto (first wallet), CNY, USD, or any other
-  currency the account holds. USD is always offered; balances and spend in CNY
-  are converted with the cached reference rate. Budgets are kept per currency.
-- **Language switch** in Settings: follow the system, 中文, English, or Italian
-  (Italiano); the choice is stored per plugin and applies immediately.
-- **Exchange rate**: the CNY→USD rate is refreshed weekly (and on demand from
-  the Settings tab) through a plain HTTPS GET to the public Frankfurter/ECB
-  endpoint. It costs **no model tokens** and the last rate is kept when the
-  request fails.
-- **7-day detail view** (明细): per-session totals across the last seven days,
-  then each day with its own per-session split. This breakdown is recorded from
-  this version on; older days show only their day total.
-- In the collapsed rail the row becomes a currency glyph whose tooltip carries
-  the figures; the panel still opens from it.
+- **余额行**：充值余额、赠送余额、今日消耗；折叠栏显示货币符号，悬停看数字。
+- **面板**：余额、赠送、可用天数、今日消耗、本月消耗、本次会话、无归属「其他」、近 7 天柱状图、会话消耗 Top 5、最近任务 4 条。
+- **预算**：每日/每月预算，按币种独立；进度条和百分比，超支时面板与侧栏数字变红。
+- **可用天数**：最近 7 个完整日中「有花费的天数」做分母，`总花费 ÷ 天数 = 日均`，再用余额 ÷ 日均。例：5 天共花 ¥4 → 日均 ¥0.80。
+- **币种**：自动 / CNY / USD / 账户持有的其他币种；USD 始终可选，CNY 余额按缓存的参考汇率换算。
+- **汇率**：CNY→USD 每周自动更新一次，也可在设置里手动刷新；走公共 Frankfurter/ECB 接口，**不消耗模型 token**，失败时保留上次汇率。
+- **明细**：近 7 天按会话合计，以及每天各会话分别花了多少（从本版本开始记录，更早的日期只有日总额）。
+- **语言**：跟随系统 / 中文 / English / Italiano，插件内立即生效。
+- **刷新**：15/30/60 秒或暂停；启动、任务结束结算、凭据变化、页面可见、手动刷新都会读取。
 
-When the account is signed out nothing is rendered.
+### 数据从哪来
 
-## Where the numbers come from
+余额来自 `account/getBalance`（与 设置 → 账户 相同的 Remote 命令）。DSH 没有按会话计费的查询接口，所以消耗由余额变化推导：
 
-Balances come from `account/getBalance` — the same Remote command the
-Settings → Account section uses. The Host exposes **no per-session billing
-query**, so spend is derived from balance movement:
+- 每次成功读取都比较总可用余额（充值 + 赠送）；
+- 下降记为消耗，归到正在运行的任务，或 20 秒结算窗口内刚结束的任务；
+- 上升视为充值/赠送，不算负消耗；
+- 没有任何任务可归属的下降进入「其他」，只计入日总额；
+- 超过 6 小时未读取的账本视为过期基线，下次读取只重置基线，不补记未知变动。
 
-- Every successful read compares the **total available balance**
-  (topped-up + granted) with the previous reading.
-- A **decrease** is spend. It is charged to the run that is open, or to a run
-  that ended within the settlement window (Platform books charges shortly after
-  a request completes), and recorded per day, per session, and per run. When no
-  run event was seen (the plugin loaded mid-task), the session the Host reports
-  as running takes the charge.
-- An **increase** is a top-up or grant and is never counted as negative spend.
-- A decrease observed with no run to charge (another client on the same
-  account, or a long-idle period) lands in an *unattributed* bucket that only
-  the day total includes; the panel shows it as **其他** while it is non-zero.
-- A ledger whose last reading is more than six hours old is treated as a stale
-  baseline: the new reading re-seeds the baseline instead of booking unknown
-  movement into today.
+这是近似值：Host 无法在服务端把账单归到某个会话，重叠运行的任务会算给最近开始的那个。
 
-This is an approximation by construction — the Host cannot attribute a charge
-to a session on the server side. Runs that overlap in time are charged to the
-most recently started one, and a Platform charge that lands more than 20 s after
-a run ends is no longer attributed to it.
+### 存储与隐私
 
-The refresh triggers are unchanged: startup, every finished task, credential
-changes, the page becoming visible, the configured poll, and the panel's refresh
-button. The poll interval is selectable in Settings (15 s / 30 s / 60 s) or can
-be paused; pausing stops the timer and the visibility refresh, while manual
-refreshes and the post-task settlement reads still run. A finished task
-additionally re-reads at +1.5 s, +5 s, and +12 s so settlement is attributed to
-it.
+账本在 `localStorage` 的 `dsh-balance-chip/stats/v1`：`days`（60 天）、`sessions`（120 个）、`sessionDays`（按天按会话，0.7.0 起）、`runs`（50 个）、`last`、`unattributed`。设置在同前缀的 `settings/v1`，汇率缓存在 `fx/v1`。
 
-## Storage
+除了 `account/getBalance` 和每周一次的汇率 GET，不发起其他请求；数据不上传。导出/导入/清除统计在面板的 **设置** 里。
 
-The ledger lives in the page's `localStorage` under
-`dsh-balance-chip/stats/v1` (renderer-local, survives app restarts):
-
-| Field | Contents |
-|---|---|
-| `days` | per-day spend by currency, 60 days |
-| `sessions` | per-session spend by currency, 120 most recent |
-| `sessionDays` | per-day, per-session spend (recorded since 0.7.0) |
-| `runs` | the 50 most recent tasks with start, end, and spend |
-| `last` | the balance baseline the next read is compared against |
-| `unattributed` | spend with no run to charge |
-
-Deleting that key resets the statistics. The ledger never leaves the machine.
-
-Preferences live under `dsh-balance-chip/settings/v1`:
-
-| Field | Contents |
-|---|---|
-| `budgets.daily` | daily budget per currency, e.g. `{ "CNY": 5 }` |
-| `budgets.monthly` | monthly budget per currency |
-| `refreshMs` | poll interval: `15000`, `30000`, `60000`, or `0` (paused) |
-| `currency` | explicit display currency, or `null` for the first wallet |
-| `locale` | `zh`, `en`, `it`, or `null` to follow the host language |
-
-Both keys are sanitized on read: unknown versions, malformed budgets, and
-unlisted intervals fall back to defaults instead of breaking the row.
-
-The CNY→USD reference rate is cached separately under
-`dsh-balance-chip/fx/v1`:
-
-| Field | Contents |
-|---|---|
-| `rate` | USD per 1 CNY |
-| `date` | reference date reported by the rate source |
-| `fetchedAt` | when the rate was last fetched successfully |
-| `attemptedAt` | last attempt, used to back off after a failure |
-| `source` | `frankfurter` or `default` |
-
-A cached rate older than seven days is refreshed in the background; the bundled
-fallback is 0.15 USD per CNY until the first successful fetch.
-
-## Budgets, runway, and backups
-
-The panel's **设置** tab edits the display currency, budgets, the UI language,
-and the refresh interval, shows the cached exchange rate with a manual
-**刷新汇率** button, and holds the local data tools:
-
-- **Export JSON** downloads `dsh-balance-chip-YYYY-MM-DD.json`, containing the
-  ledger and preferences. Use it to move statistics between machines or to keep
-  a snapshot before clearing.
-- **Export CSV** downloads `dsh-balance-chip-YYYY-MM-DD.csv`
-  (`date,currency,spend`, UTF-8 BOM) for spreadsheets.
-- **Import JSON** replaces the current ledger with a backup. Invalid or
-  unsupported files are rejected without touching the existing data.
-- **Clear local stats** wipes the ledger after a second confirming click and
-  keeps the budgets.
-
-Budgets are advisory: they never block a run and never call the network. The
-runway uses seven complete days so a half-finished day cannot skew the
-estimate, then divides the window total by the number of days that actually
-spent something — a week with five spending days and ¥4 total burns ¥0.80/day.
-When the past week has no spend it falls back to the last seven days including
-today, and shows `—` when there is nothing to average.
-
-## Install
-
-The package is a dsh *bundle*: `dsh.bundle.patch` mounts one Loader row, and the
-row's `dsh.client` declaration is what makes the browser bundle part of the Web
-boot graph.
-
-From GitHub, in the profile directory (`~/.dsh/profiles/desktop`):
+### 安装
 
 ```sh
 pnpm add github:Cesare97/dsh-balance-chip-cesare
 ```
 
-then add the bundle to `package.json` `dsh.profile.bundles` (or install it
-through Settings → Plugins). With HMR enabled the row appears without a restart.
+然后把它加入 profile 的 `dsh.profile.bundles`，或在 **设置 → 插件** 中安装。本地开发用 `link:` 指向源码目录。
 
-For local development, link the checkout instead:
+### 开发
 
-```sh
-pnpm add link:/absolute/path/to/dsh-balance-chip-cesare
-```
-
-## Layout contract
-
-The row renders into the root-scoped **`sidebar.footer.action`** list slot
-(`{ wide }` props), which `@deepseek-ai/dsh-client-ui-sidebar` mounts between the
-workspace region and the bottom-pinned `sidebar.settings` seat. The panel is
-portalled into `document.body` and positioned from the row's bounding box, so no
-sidebar clip or transform can contain it. Styling reuses the sidebar's own custom
-properties (`--dsh-sidebar-row-padding`, `--dsh-sidebar-paint-inset`) and theme
-aliases, so it follows the column width, collapse animation, and light/dark
-palettes.
-
-## Development
-
-Both halves are plain JavaScript with no build step:
-
-- `lib/index.js` — inert Host half; it exists so the package can be a Loader
-  entry (the boot graph is composed from enabled Loader rows).
-- `lib/client.js` — lazy-CJS browser bundle
-  (`window.__ModuleLoader__.load({ id, factory })`).
-
-An offline check drives `apply`, slot registration, the row, the panel, the
-settings form, the ledger, budgets, runway, currency selection, exchange-rate
-conversion, language switching, and CSV/JSON round-trips with
-stubbed `window`/`document`/React, so formatting, attribution, and state paths
-are verifiable without a browser:
+`lib/index.js` 是惰性的 Host 半，`lib/client.js` 是零构建的浏览器 bundle。离线检查：
 
 ```sh
 node scripts/check.mjs
 ```
 
-`ELECTRON_RUN_AS_NODE=1 "<app>" scripts/check.mjs` still works if Node is not
-installed separately.
+---
 
-Rebuild-free edits still need the client bundle re-served: toggle the plugin on
-the Plugins page (or reload the page). The profile installs the source tree with
-a `link:` dependency, so a moved or deleted directory breaks the install.
+## English
+
+A DeepSeek Harness (dsh) plugin that keeps the account balance, granted balance, and spend statistics in the sidebar, directly above **Settings**. It also tracks advisory budgets, estimates how many days the balance will last, converts CNY↔USD, records a seven-day per-session breakdown, and can export or restore the local ledger.
+
+### Features
+
+- **Sidebar row**: topped-up balance, granted balance, today's spend; a currency glyph in the collapsed rail with the figures in its tooltip.
+- **Panel**: balance, granted balance, runway, today, this month, this session, unattributed spend, a 7-day strip, the top sessions, and the most recent tasks.
+- **Budgets**: daily and monthly, per display currency, with progress bars and percentages; over-budget figures turn red in both the panel and the row.
+- **Runway**: the last seven complete days are summed and divided by the number of days that actually spent something, then the available balance is divided by that average. Five spending days totalling ¥4 means ¥0.80/day.
+- **Currency**: auto, CNY, USD, or any currency the account holds. USD is always offered; CNY amounts are converted with the cached reference rate.
+- **Exchange rate**: the CNY→USD rate refreshes weekly (and on demand) from the public Frankfurter/ECB endpoint. It costs **no model tokens**; the last rate is kept when a refresh fails.
+- **Details view**: per-session totals for the last seven days, plus each day's per-session split. The split is recorded from this version on; older days keep only their day total.
+- **Language**: follow the system, 中文, English, or Italiano, applied inside the plugin immediately.
+- **Refresh**: 15/30/60 s or paused; reads also happen at startup, after a task settles, on credential changes, when the page becomes visible, and on the manual button.
+
+### Where the numbers come from
+
+Balances come from `account/getBalance`, the same Remote command the Settings → Account section uses. The Host has no per-session billing query, so spend is derived from balance movement: a decrease is spend (charged to the open run, or one that ended inside the 20 s settlement window), an increase is a top-up or grant, and a decrease with no run to charge lands in the unattributed bucket. A ledger whose last read is more than six hours old re-seeds its baseline instead of booking unknown movement.
+
+This is an approximation by construction: overlapping runs are charged to the most recently started one, and a Platform charge that lands more than 20 s after a run ends is no longer attributed to it.
+
+### Storage and privacy
+
+The ledger lives in `localStorage` under `dsh-balance-chip/stats/v1` (`days`, `sessions`, `sessionDays`, `runs`, `last`, `unattributed`). Preferences live in `settings/v1` and the rate cache in `fx/v1`, under the same prefix.
+
+Nothing leaves the machine except the balance read and the weekly rate GET. Export JSON/CSV, import JSON, and clear stats are in the panel's **Settings** tab.
+
+### Install
+
+```sh
+pnpm add github:Cesare97/dsh-balance-chip-cesare
+```
+
+Then add it to the profile's `dsh.profile.bundles`, or install it from **Settings → Plugins**. For local development, link the checkout with `link:` instead.
+
+### Development
+
+`lib/index.js` is the inert Host half; `lib/client.js` is a zero-build browser bundle. Offline check:
+
+```sh
+node scripts/check.mjs
+```
+
+---
+
+## Italiano
+
+Un plugin per DeepSeek Harness (dsh) che mostra nella barra laterale, subito sopra **Impostazioni**, saldo, saldo bonus e statistiche di spesa. Include budget, autonomia del saldo, conversione CNY↔USD, dettaglio degli ultimi sette giorni per sessione e backup/ripristino locale.
+
+### Funzioni
+
+- **Riga laterale**: saldo ricaricato, saldo bonus e spesa di oggi; nella barra compressa compare il simbolo della valuta con i valori nel tooltip.
+- **Pannello**: saldo, saldo bonus, autonomia, spesa di oggi, del mese, della sessione, spese non attribuite, istogramma degli ultimi 7 giorni, sessioni principali e attività recenti.
+- **Budget**: giornaliero e mensile, per valuta visualizzata, con barra di avanzamento e percentuale; gli sforamenti diventano rossi nel pannello e nella riga.
+- **Autonomia**: si sommano gli ultimi sette giorni completi e si divide per il numero di giorni in cui c'è stata spesa, poi si divide il saldo disponibile per quella media. Cinque giorni con 4 ¥ totali significano 0,80 ¥/giorno.
+- **Valuta**: automatica, CNY, USD o qualsiasi valuta presente sull'account. USD è sempre disponibile; gli importi in CNY vengono convertiti con il cambio memorizzato.
+- **Cambio**: il tasso CNY→USD si aggiorna ogni settimana (o su richiesta) dal servizio pubblico Frankfurter/BCE. Non consuma **token del modello**; in caso di errore resta l'ultimo cambio.
+- **Dettaglio**: totali per sessione degli ultimi sette giorni e, per ogni giorno, la spesa di ciascuna sessione. Il dettaglio viene registrato da questa versione; i giorni precedenti hanno solo il totale.
+- **Lingua**: segui il sistema, 中文, English o Italiano, applicata subito nel plugin.
+- **Aggiornamento**: 15/30/60 s oppure in pausa; si aggiorna anche all'avvio, al termine di un'attività, al cambio credenziali, quando la pagina torna visibile e con il pulsante manuale.
+
+### Da dove arrivano i numeri
+
+I saldi arrivano da `account/getBalance`, lo stesso comando Remote della sezione Impostazioni → Account. L'Host non espone una fatturazione per sessione, quindi la spesa è ricavata dalla variazione del saldo: una diminuzione è spesa (addebitata all'esecuzione aperta o a una terminata entro 20 s), un aumento è una ricarica o un bonus, e una diminuzione senza esecuzione finisce nelle spese non attribuite. Un saldo fermo da più di sei ore viene usato solo come nuova base.
+
+È un'approssimazione: le esecuzioni sovrapposte vengono addebitate a quella iniziata per ultima e un addebito che arriva più di 20 s dopo la fine non viene più attribuito.
+
+### Dati e privacy
+
+Il registro vive in `localStorage` sotto `dsh-balance-chip/stats/v1` (`days`, `sessions`, `sessionDays`, `runs`, `last`, `unattributed`). Le preferenze stanno in `settings/v1` e il cambio in `fx/v1`, con lo stesso prefisso.
+
+Oltre alla lettura del saldo e al controllo settimanale del cambio non parte nessuna richiesta; i dati non vengono caricati altrove. Esporta JSON/CSV, importa JSON e cancella statistiche sono nella scheda **Impostazioni** del pannello.
+
+### Installazione
+
+```sh
+pnpm add github:Cesare97/dsh-balance-chip-cesare
+```
+
+Poi aggiungilo a `dsh.profile.bundles` del profilo, oppure installalo da **Impostazioni → Plugin**. Per lo sviluppo locale usa un collegamento `link:`.
+
+### Sviluppo
+
+`lib/index.js` è la metà Host inerte; `lib/client.js` è il bundle browser senza build. Verifica offline:
+
+```sh
+node scripts/check.mjs
+```
