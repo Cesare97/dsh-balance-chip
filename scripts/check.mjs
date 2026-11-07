@@ -1,4 +1,4 @@
-// Offline check for the browser half of dsh-balance-chip.
+// Offline check for the browser half of dsh-balance-chip-cesare.
 //
 // The plugin bundle is a lazy-CJS module factory: it needs `window`, `document`,
 // and the shell's shared module table, none of which exist in Node. This script
@@ -246,6 +246,10 @@ const zhCopy = {
   avgDaily: '近 7 天日均',
   settings: '设置',
   back: '返回',
+  breakdown: '明细',
+  weekBySession: '近 7 天 · 按会话',
+  byDay: '按天 · 每个会话',
+  noSessionSpend: '暂无会话明细',
   dailyBudget: '每日预算',
   monthlyBudget: '每月预算',
   budgetUnset: '不限',
@@ -315,7 +319,7 @@ console.log('registration contract')
     react,
     '@deepseek-ai/dsh-client-ui-primitives': { Tooltip: (props) => createElement('tooltip-stub', props, props.children) },
   })
-  check('bundle registers under the package id', definition.id === 'dsh-balance-chip', definition.id)
+  check('bundle registers under the package id', definition.id === 'dsh-balance-chip-cesare', definition.id)
   const { ctx, registrations, injectCalls } = createContext({ getBalance: async () => ready([{ currency: 'CNY', balance: '1' }]) })
   exports.apply(ctx)
   await settle()
@@ -327,7 +331,7 @@ console.log('registration contract')
   check('row id is stable', registration?.options.id === 'balance-chip', registration?.options.id)
   check('row sorts above other foot actions', registration?.options.order === -100, String(registration?.options.order))
   check('dictionaries use the row namespace', registration?.options.locale === 'balance-chip', registration?.options.locale)
-  check('styles are installed once', styleTags.length === 1 && styleTags[0].dataset.plugin === 'dsh-balance-chip', String(styleTags.length))
+  check('styles are installed once', styleTags.length === 1 && styleTags[0].dataset.plugin === 'dsh-balance-chip-cesare', String(styleTags.length))
 }
 
 console.log('\nbalance display')
@@ -751,6 +755,58 @@ console.log('\nlanguage')
   const selects = elementsOf(view).filter((node) => node.type === 'select')
   check('language picker preselects the stored value', selects[0].props.value === 'it', String(selects[0].props.value))
   check('language picker offers Italian', textOf(view).includes('Italiano'), textOf(view))
+}
+
+console.log('\nper-session daily breakdown')
+{
+  const { exports } = loadBundle({ react, '@deepseek-ai/dsh-client-ui-primitives': {} })
+  const test = exports.__test
+  const ledger = test.emptyStats()
+  const now = Date.now()
+  const today = test.dayKey(now)
+  const yesterday = test.dayKey(now - 86400000)
+  ledger.days[today] = { CNY: 3 }
+  ledger.days[yesterday] = { CNY: 3 }
+  ledger.sessionDays[today] = { s1: { CNY: 1 }, s2: { CNY: 2 } }
+  ledger.sessionDays[yesterday] = { s1: { CNY: 3 } }
+
+  const week = test.weekSessionTotals(ledger, 'CNY', test.emptyFx())
+  check('week totals merge days per session', week.length === 2 && week[0].id === 's1' && week[0].amount === 4, JSON.stringify(week))
+  const dayRows = test.sessionDayRows(ledger, today, 'CNY', test.emptyFx())
+  check('day rows split by session and sort by amount', dayRows.length === 2 && dayRows[0].id === 's2' && dayRows[0].amount === 2, JSON.stringify(dayRows))
+
+  const state = {
+    phase: 'ready',
+    wallets: [{ currency: 'CNY', balance: '10' }],
+    bonus: [],
+    stats: ledger,
+    settings: test.emptySettings(),
+    fx: test.emptyFx(),
+    at: now,
+  }
+  const sessions = { byId: { s1: { title: '会话一' }, s2: { title: '会话二' } } }
+  const detail = test.DetailView({ state, sessions, t })
+  const text = textOf(detail)
+  check('detail lists the week by session', text.includes('近 7 天 · 按会话') && text.includes('会话一') && text.includes('会话二'), text)
+  check('detail lists each day with its sessions', text.includes('按天 · 每个会话') && text.includes('今日') && text.includes('昨日'), text)
+
+  const panel = test.StatsPanel({
+    state,
+    sessions,
+    currentSessionId: null,
+    t,
+    onRefresh: () => {},
+    position: null,
+    view: 'detail',
+  })
+  check(
+    'panel opens the detail view',
+    elementsOf(panel).some((node) => node.type === test.DetailView),
+    'no detail element',
+  )
+
+  const sanitized = test.buildStats(JSON.parse(JSON.stringify(ledger)))
+  check('sessionDays survives sanitization', sanitized.sessionDays[today].s2.CNY === 2, JSON.stringify(sanitized.sessionDays))
 }
 
 console.log('')

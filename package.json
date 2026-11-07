@@ -1,6 +1,6 @@
 {
-  "name": "dsh-balance-chip",
-  "version": "0.6.1",
+  "name": "dsh-balance-chip-cesare",
+  "version": "0.7.0",
   "description": "Show the DeepSeek account balance in the sidebar, directly above Settings",
   "type": "module",
   "main": "lib/index.js",
@@ -23,6 +23,11 @@
   ],
   "license": "MIT",
   "author": "cesare",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cesare97/dsh-balance-chip-cesare.git"
+  },
+  "homepage": "https://github.com/Cesare97/dsh-balance-chip-cesare#readme",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

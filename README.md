@@ -1,4 +1,4 @@
-# dsh-balance-chip
+# dsh-balance-chip-cesare
 
 A DeepSeek Harness (dsh) plugin that keeps the account balance, the granted
 balance, and spend statistics in the sidebar, directly above **Settings**.
@@ -66,6 +66,9 @@ Clicking the row opens a detail panel:
   the Settings tab) through a plain HTTPS GET to the public Frankfurter/ECB
   endpoint. It costs **no model tokens** and the last rate is kept when the
   request fails.
+- **7-day detail view** (明细): per-session totals across the last seven days,
+  then each day with its own per-session split. This breakdown is recorded from
+  this version on; older days show only their day total.
 - In the collapsed rail the row becomes a currency glyph whose tooltip carries
   the figures; the panel still opens from it.
 
@@ -114,6 +117,7 @@ The ledger lives in the page's `localStorage` under
 |---|---|
 | `days` | per-day spend by currency, 60 days |
 | `sessions` | per-session spend by currency, 120 most recent |
+| `sessionDays` | per-day, per-session spend (recorded since 0.7.0) |
 | `runs` | the 50 most recent tasks with start, end, and spend |
 | `last` | the balance baseline the next read is compared against |
 | `unattributed` | spend with no run to charge |
@@ -179,7 +183,7 @@ boot graph.
 From GitHub, in the profile directory (`~/.dsh/profiles/desktop`):
 
 ```sh
-pnpm add github:Cesare97/dsh-balance-chip
+pnpm add github:Cesare97/dsh-balance-chip-cesare
 ```
 
 then add the bundle to `package.json` `dsh.profile.bundles` (or install it
@@ -188,7 +192,7 @@ through Settings → Plugins). With HMR enabled the row appears without a restar
 For local development, link the checkout instead:
 
 ```sh
-pnpm add link:/absolute/path/to/dsh-balance-chip
+pnpm add link:/absolute/path/to/dsh-balance-chip-cesare
 ```
 
 ## Layout contract
