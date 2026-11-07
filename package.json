@@ -1,6 +1,6 @@
 {
   "name": "dsh-balance-chip-cesare",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Show the DeepSeek account balance in the sidebar, directly above Settings",
   "type": "module",
   "main": "lib/index.js",

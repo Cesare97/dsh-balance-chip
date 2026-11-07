@@ -250,6 +250,8 @@ const zhCopy = {
   weekBySession: '近 7 天 · 按会话',
   byDay: '按天 · 每个会话',
   noSessionSpend: '暂无会话明细',
+  estimated: '估算',
+  estimatedNote: '标为「估算」的日期由任务记录还原，未归属的消耗不会出现在会话明细里',
   dailyBudget: '每日预算',
   monthlyBudget: '每月预算',
   budgetUnset: '不限',
@@ -807,6 +809,20 @@ console.log('\nper-session daily breakdown')
 
   const sanitized = test.buildStats(JSON.parse(JSON.stringify(ledger)))
   check('sessionDays survives sanitization', sanitized.sessionDays[today].s2.CNY === 2, JSON.stringify(sanitized.sessionDays))
+
+  const legacy = test.emptyStats()
+  legacy.days[today] = { CNY: 2 }
+  legacy.runs = [
+    { s: 'r1', t: now - 2000, e: 0, c: { CNY: 1.2 } },
+    { s: 'r2', t: now - 1000, e: 0, c: { CNY: 0.8 } },
+  ]
+  const legacyRows = test.sessionDayRows(legacy, today, 'CNY', test.emptyFx())
+  check('falls back to run records for old days', legacyRows.length === 2 && legacyRows[0].id === 'r1' && legacyRows[0].amount === 1.2, JSON.stringify(legacyRows))
+  check('marks the fallback day as estimated', test.sessionDayEstimated(legacy, today) === true)
+  const legacyState = { ...state, stats: legacy }
+  const legacyDetail = test.DetailView({ state: legacyState, sessions: { byId: { r1: { title: '旧一' }, r2: { title: '旧二' } } }, t })
+  const legacyText = textOf(legacyDetail)
+  check('detail labels the estimated day', legacyText.includes('估算') && legacyText.includes('旧一'), legacyText)
 }
 
 console.log('')

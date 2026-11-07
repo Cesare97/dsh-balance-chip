@@ -16,7 +16,7 @@ DeepSeek Harness（DSH）侧栏余额与消耗插件，固定在 **设置** 上�
 - **可用天数**：最近 7 个完整日中「有花费的天数」做分母，`总花费 ÷ 天数 = 日均`，再用余额 ÷ 日均。例：5 天共花 ¥4 → 日均 ¥0.80。
 - **币种**：自动 / CNY / USD / 账户持有的其他币种；USD 始终可选，CNY 余额按缓存的参考汇率换算。
 - **汇率**：CNY→USD 每周自动更新一次，也可在设置里手动刷新；走公共 Frankfurter/ECB 接口，**不消耗模型 token**，失败时保留上次汇率。
-- **明细**：近 7 天按会话合计，以及每天各会话分别花了多少（从本版本开始记录，更早的日期只有日总额）。
+- **明细**：近 7 天按会话合计，以及每天各会话分别花了多少。从 0.7.0 起精确记录；更早的日期会用保留的任务记录还原并标注「估算」，未归属的消耗只计入日总额。
 - **语言**：跟随系统 / 中文 / English / Italiano，插件内立即生效。
 - **刷新**：15/30/60 秒或暂停；启动、任务结束结算、凭据变化、页面可见、手动刷新都会读取。
 
@@ -68,7 +68,7 @@ A DeepSeek Harness (dsh) plugin that keeps the account balance, granted balance,
 - **Runway**: the last seven complete days are summed and divided by the number of days that actually spent something, then the available balance is divided by that average. Five spending days totalling ¥4 means ¥0.80/day.
 - **Currency**: auto, CNY, USD, or any currency the account holds. USD is always offered; CNY amounts are converted with the cached reference rate.
 - **Exchange rate**: the CNY→USD rate refreshes weekly (and on demand) from the public Frankfurter/ECB endpoint. It costs **no model tokens**; the last rate is kept when a refresh fails.
-- **Details view**: per-session totals for the last seven days, plus each day's per-session split. The split is recorded from this version on; older days keep only their day total.
+- **Details view**: per-session totals for the last seven days, plus each day's per-session split. Days recorded from 0.7.0 on are exact; older days are rebuilt from the retained task records and marked **estimated**, and unattributed spend still only appears in the day total.
 - **Language**: follow the system, 中文, English, or Italiano, applied inside the plugin immediately.
 - **Refresh**: 15/30/60 s or paused; reads also happen at startup, after a task settles, on credential changes, when the page becomes visible, and on the manual button.
 
@@ -114,7 +114,7 @@ Un plugin per DeepSeek Harness (dsh) che mostra nella barra laterale, subito sop
 - **Autonomia**: si sommano gli ultimi sette giorni completi e si divide per il numero di giorni in cui c'è stata spesa, poi si divide il saldo disponibile per quella media. Cinque giorni con 4 ¥ totali significano 0,80 ¥/giorno.
 - **Valuta**: automatica, CNY, USD o qualsiasi valuta presente sull'account. USD è sempre disponibile; gli importi in CNY vengono convertiti con il cambio memorizzato.
 - **Cambio**: il tasso CNY→USD si aggiorna ogni settimana (o su richiesta) dal servizio pubblico Frankfurter/BCE. Non consuma **token del modello**; in caso di errore resta l'ultimo cambio.
-- **Dettaglio**: totali per sessione degli ultimi sette giorni e, per ogni giorno, la spesa di ciascuna sessione. Il dettaglio viene registrato da questa versione; i giorni precedenti hanno solo il totale.
+- **Dettaglio**: totali per sessione degli ultimi sette giorni e, per ogni giorno, la spesa di ciascuna sessione. I giorni registrati da 0.7.0 sono esatti; quelli precedenti vengono ricostruiti dai record delle attività e contrassegnati come **stimati**, mentre la spesa non attribuita resta solo nel totale giornaliero.
 - **Lingua**: segui il sistema, 中文, English o Italiano, applicata subito nel plugin.
 - **Aggiornamento**: 15/30/60 s oppure in pausa; si aggiorna anche all'avvio, al termine di un'attività, al cambio credenziali, quando la pagina torna visibile e con il pulsante manuale.
 
