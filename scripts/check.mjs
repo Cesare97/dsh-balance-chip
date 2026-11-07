@@ -253,6 +253,9 @@ const zhCopy = {
   refreshInterval: '刷新间隔',
   currency: '显示币种',
   auto: '自动',
+  exchangeRate: '汇率',
+  refreshRate: '刷新汇率',
+  fxDefault: '默认汇率（未联网）',
   off: '暂停',
   seconds: '秒',
   exportJson: '导出 JSON',
@@ -672,6 +675,50 @@ console.log('\nrunway over spending days')
   const state = { phase: 'ready', wallets: [{ currency: 'CNY', balance: '10' }], bonus: [], stats: ledger, settings: test.emptySettings(), at: Date.now() }
   const panel = test.StatsPanel({ state, sessions: { byId: {} }, currentSessionId: null, t, onRefresh: () => {}, position: null })
   check('panel floors the runway', textOf(panel).includes('可用天数约 12 天'), textOf(panel))
+}
+
+console.log('\nexchange rate')
+{
+  const { exports } = loadBundle({ react, '@deepseek-ai/dsh-client-ui-primitives': {} })
+  const test = exports.__test
+  const fx = { v: 1, base: 'CNY', quote: 'USD', rate: 0.15, date: '2026-11-06', fetchedAt: Date.now(), attemptedAt: Date.now(), source: 'frankfurter' }
+
+  check('converts CNY to USD', test.convertAmount(10, 'CNY', 'USD', fx) === 1.5, String(test.convertAmount(10, 'CNY', 'USD', fx)))
+  check('keeps the same currency untouched', test.convertAmount(10, 'CNY', 'CNY', fx) === 10, String(test.convertAmount(10, 'CNY', 'CNY', fx)))
+  check('converts USD back to CNY', test.convertAmount(3, 'USD', 'CNY', fx) === 20, String(test.convertAmount(3, 'USD', 'CNY', fx)))
+  check('refuses unsupported pairs', test.convertAmount(3, 'EUR', 'USD', fx) === null, String(test.convertAmount(3, 'EUR', 'USD', fx)))
+  check('sums a mixed map into one currency', test.sumConverted({ CNY: 10, USD: 2 }, 'USD', fx) === 3.5, String(test.sumConverted({ CNY: 10, USD: 2 }, 'USD', fx)))
+  check('renders a converted wallet total', test.walletsDisplayText([{ currency: 'CNY', balance: '10' }], 'USD', fx) === '$1.50', test.walletsDisplayText([{ currency: 'CNY', balance: '10' }], 'USD', fx))
+  check('USD is always offered', test.availableCurrencies({ wallets: [{ currency: 'CNY', balance: '1' }], bonus: [] }).join(',') === 'CNY,USD', test.availableCurrencies({ wallets: [{ currency: 'CNY', balance: '1' }], bonus: [] }).join(','))
+
+  const now = Date.now()
+  check('a fresh rate needs no refresh', test.fxNeedsRefresh({ ...test.emptyFx(), fetchedAt: now - 86400000 }, now) === false)
+  check('a rate older than a week refreshes', test.fxNeedsRefresh({ ...test.emptyFx(), fetchedAt: now - 8 * 86400000 }, now) === true)
+  check('the default rate retries after a day', test.fxNeedsRefresh({ ...test.emptyFx(), attemptedAt: now - 2 * 86400000 }, now) === true)
+  check('a recent failure is not retried', test.fxNeedsRefresh({ ...test.emptyFx(), attemptedAt: now - 3600000 }, now) === false)
+  check('sanitizes a bad rate back to the default', test.buildFx({ v: 1, rate: -1 }).rate === 0.15, String(test.buildFx({ v: 1, rate: -1 }).rate))
+  check('keeps a valid rate', test.buildFx({ v: 1, rate: 0.1499, fetchedAt: now }).rate === 0.1499, String(test.buildFx({ v: 1, rate: 0.1499 }).rate))
+
+  const ledger = test.emptyStats()
+  const today = test.dayKey(Date.now())
+  ledger.days[today] = { CNY: 10 }
+  const state = {
+    phase: 'ready',
+    wallets: [{ currency: 'CNY', balance: '100' }],
+    bonus: [],
+    stats: ledger,
+    settings: { ...test.emptySettings(), currency: 'USD' },
+    fx,
+    at: now,
+  }
+  const panel = test.StatsPanel({ state, sessions: { byId: {} }, currentSessionId: null, t, onRefresh: () => {}, position: null })
+  const text = textOf(panel)
+  check('panel shows the converted balance', text.includes('余额$15.00'), text)
+  check('panel shows the converted day total', text.includes('今日消耗$1.50'), text)
+
+  const view = test.SettingsView({ settings: state.settings, currency: 'USD', currencies: ['CNY', 'USD'], fx, t, actions: {} })
+  check('settings show the live rate', textOf(view).includes('1 CNY = 0.15 USD'), textOf(view))
+  check('settings offer a rate refresh', textOf(view).includes('刷新汇率'), textOf(view))
 }
 
 console.log('')

@@ -3,8 +3,8 @@
 A DeepSeek Harness (dsh) plugin that keeps the account balance, the granted
 balance, and spend statistics in the sidebar, directly above **Settings**.
 It also tracks advisory daily/monthly budgets, estimates how many days the
-balance will last, switches the display currency, and can export or restore the
-local ledger.
+balance will last, switches the display currency (including CNY↔USD conversion
+with a weekly reference rate), and can export or restore the local ledger.
 
 ```
 ┌─────────────────────────┐
@@ -57,8 +57,13 @@ Clicking the row opens a detail panel:
 - **Runway**: available balance divided by the average spend of the days that
   actually spent money in the last seven complete days, shown as an
   approximate number of days (five spending days totalling ¥4 means ¥0.80/day).
-- **Currency switch** in Settings: auto (first wallet) or any currency the
-  account currently holds; budgets are kept per currency.
+- **Currency switch** in Settings: auto (first wallet), CNY, USD, or any other
+  currency the account holds. USD is always offered; balances and spend in CNY
+  are converted with the cached reference rate. Budgets are kept per currency.
+- **Exchange rate**: the CNY→USD rate is refreshed weekly (and on demand from
+  the Settings tab) through a plain HTTPS GET to the public Frankfurter/ECB
+  endpoint. It costs **no model tokens** and the last rate is kept when the
+  request fails.
 - In the collapsed rail the row becomes a currency glyph whose tooltip carries
   the figures; the panel still opens from it.
 
@@ -125,10 +130,25 @@ Preferences live under `dsh-balance-chip/settings/v1`:
 Both keys are sanitized on read: unknown versions, malformed budgets, and
 unlisted intervals fall back to defaults instead of breaking the row.
 
+The CNY→USD reference rate is cached separately under
+`dsh-balance-chip/fx/v1`:
+
+| Field | Contents |
+|---|---|
+| `rate` | USD per 1 CNY |
+| `date` | reference date reported by the rate source |
+| `fetchedAt` | when the rate was last fetched successfully |
+| `attemptedAt` | last attempt, used to back off after a failure |
+| `source` | `frankfurter` or `default` |
+
+A cached rate older than seven days is refreshed in the background; the bundled
+fallback is 0.15 USD per CNY until the first successful fetch.
+
 ## Budgets, runway, and backups
 
 The panel's **设置** tab edits the display currency, budgets, and the refresh
-interval, and holds the local data tools:
+interval, shows the cached exchange rate with a manual **刷新汇率** button, and
+holds the local data tools:
 
 - **Export JSON** downloads `dsh-balance-chip-YYYY-MM-DD.json`, containing the
   ledger and preferences. Use it to move statistics between machines or to keep
@@ -189,9 +209,9 @@ Both halves are plain JavaScript with no build step:
   (`window.__ModuleLoader__.load({ id, factory })`).
 
 An offline check drives `apply`, slot registration, the row, the panel, the
-settings form, the ledger, budgets, runway, currency selection, and CSV/JSON
-round-trips with stubbed `window`/`document`/React, so formatting, attribution,
-and state paths are verifiable without a browser:
+settings form, the ledger, budgets, runway, currency selection, exchange-rate
+conversion, and CSV/JSON round-trips with stubbed `window`/`document`/React, so
+formatting, attribution, and state paths are verifiable without a browser:
 
 ```sh
 node scripts/check.mjs
