@@ -3,9 +3,8 @@
 A DeepSeek Harness (dsh) plugin that keeps the account balance, the granted
 balance, and spend statistics in the sidebar, directly above **Settings**.
 It also tracks advisory daily/monthly budgets, estimates how many days the
-balance will last, switches the display currency, pops bottom-left notices for
-pending confirmations and finished sessions, and can export or restore the local
-ledger.
+balance will last, switches the display currency, and can export or restore the
+local ledger.
 
 ```
 ┌─────────────────────────┐
@@ -60,9 +59,6 @@ Clicking the row opens a detail panel:
   approximate number of days (five spending days totalling ¥4 means ¥0.80/day).
 - **Currency switch** in Settings: auto (first wallet) or any currency the
   account currently holds; budgets are kept per currency.
-- **Notices**: a bottom-left toast appears when a session needs confirmation
-  (approval, question, plan review) or a background session finishes. Each
-  toast can be closed by hand and disappears on its own after five seconds.
 - In the collapsed rail the row becomes a currency glyph whose tooltip carries
   the figures; the panel still opens from it.
 
@@ -151,21 +147,6 @@ spent something — a week with five spending days and ¥4 total burns ¥0.80/da
 When the past week has no spend it falls back to the last seven days including
 today, and shows `—` when there is nothing to average.
 
-## Notices
-
-The plugin mirrors the Host's session status projection (`uiSession`) and shows
-a toast in the bottom-left corner for two events:
-
-- **待确认** — a session gained a pending interaction: an approval, a user
-  question, or a plan review. Pending interactions in the session you are
-  already viewing are skipped, because the card is on screen.
-- **会话完成** — a background session finished while you were looking
-  elsewhere (`completionUnread`).
-
-Each toast names the session, can be dismissed with its ×, and closes itself
-after five seconds. At most three stack at once; notices never call the network
-and are not persisted.
-
 ## Install
 
 The package is a dsh *bundle*: `dsh.bundle.patch` mounts one Loader row, and the
@@ -208,9 +189,9 @@ Both halves are plain JavaScript with no build step:
   (`window.__ModuleLoader__.load({ id, factory })`).
 
 An offline check drives `apply`, slot registration, the row, the panel, the
-settings form, the ledger, budgets, runway, currency selection, notices, and
-CSV/JSON round-trips with stubbed `window`/`document`/React, so formatting,
-attribution, and state paths are verifiable without a browser:
+settings form, the ledger, budgets, runway, currency selection, and CSV/JSON
+round-trips with stubbed `window`/`document`/React, so formatting, attribution,
+and state paths are verifiable without a browser:
 
 ```sh
 node scripts/check.mjs

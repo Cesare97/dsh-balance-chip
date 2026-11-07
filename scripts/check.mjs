@@ -166,7 +166,7 @@ function loadBundle(moduleTable) {
 }
 
 /** Build a client context that records slot work and session status handlers. */
-function createContext({ getBalance, dictionaries, sessions, uiSession }) {
+function createContext({ getBalance, dictionaries, sessions }) {
   const effectDisposers = []
   const registrations = []
   const injectCalls = []
@@ -174,7 +174,6 @@ function createContext({ getBalance, dictionaries, sessions, uiSession }) {
   const ctx = {
     get(name) {
       if (name === 'sessions' && sessions !== undefined) return { list: { getSnapshot: () => sessions } }
-      if (name === 'uiSession' && uiSession !== undefined) return uiSession
       return undefined
     },
     effect(factory) {
@@ -268,11 +267,6 @@ const zhCopy = {
   exported: '已导出',
   saved: '已保存',
   daysUnit: '天记录',
-  notifyConfirm: '待确认',
-  notifyConfirmBody: '有操作在等你处理',
-  notifyDone: '会话完成',
-  notifyDoneBody: '后台会话已结束',
-  dismiss: '关闭',
 }
 
 function t(key) {
@@ -289,7 +283,7 @@ function ready(value, bonus = []) {
  * @param getBalance - the Remote body to answer with.
  * @param sessions - optional sessions-list snapshot the Host would serve.
  */
-function boot(getBalance, sessions, uiSession) {
+function boot(getBalance, sessions) {
   const dictionaries = {}
   const bundle = loadBundle({
     react,
@@ -297,7 +291,7 @@ function boot(getBalance, sessions, uiSession) {
       Tooltip: (props) => createElement('tooltip-stub', props, props.children),
     },
   })
-  const context = createContext({ getBalance, dictionaries, sessions, uiSession })
+  const context = createContext({ getBalance, dictionaries, sessions })
   bundle.exports.apply(context.ctx)
   return { ...bundle, ...context, dictionaries }
 }
@@ -678,77 +672,6 @@ console.log('\nrunway over spending days')
   const state = { phase: 'ready', wallets: [{ currency: 'CNY', balance: '10' }], bonus: [], stats: ledger, settings: test.emptySettings(), at: Date.now() }
   const panel = test.StatsPanel({ state, sessions: { byId: {} }, currentSessionId: null, t, onRefresh: () => {}, position: null })
   check('panel floors the runway', textOf(panel).includes('可用天数约 12 天'), textOf(panel))
-}
-
-console.log('\nnotifications')
-{
-  const statusListeners = new Set()
-  const statusMap = new Map()
-  const uiSession = {
-    sessionStatus: {
-      getSnapshot: () => statusMap,
-      subscribe(listener) {
-        statusListeners.add(listener)
-        return () => statusListeners.delete(listener)
-      },
-    },
-  }
-  const sessions = { byId: { 'session-Z': { id: 'session-Z', title: '后台任务' } }, ids: ['session-Z'] }
-  const { registrations, timers, exports } = boot(async () => ready([{ currency: 'CNY', balance: '5' }]), sessions, uiSession)
-  await settle()
-  const registration = registrations[0]
-  const { notices, dismissNotice } = registration.options.inject()
-  const emit = (value) => {
-    statusMap.set('session-Z', value)
-    statusListeners.forEach((listener) => listener())
-  }
-
-  check('first snapshot only seeds', notices.getSnapshot().length === 0, JSON.stringify(notices.getSnapshot()))
-
-  emit({ running: true, pendingInteraction: { kind: 'tool' }, completionUnread: false })
-  const pending = notices.getSnapshot()
-  check('pending interaction pops a notice', pending.length === 1 && pending[0].kind === 'confirm', JSON.stringify(pending))
-  check('notice carries the session title', pending[0].label === '后台任务', String(pending[0].label))
-  const row = renderRow(registration, true)
-  check(
-    'row mounts the toast stack',
-    elementsOf(row).some((node) => node.type === exports.__test.ToastStack),
-    'no toast element',
-  )
-  const toastTree = exports.__test.ToastStack({ notices: notices.getSnapshot(), t })
-  check('toast shows the pending copy', textOf(toastTree).includes('待确认') && textOf(toastTree).includes('后台任务'), textOf(toastTree))
-
-  emit({ running: false, pendingInteraction: null, completionUnread: true })
-  const done = notices.getSnapshot()
-  check('completion pops a second notice', done.length === 2 && done[1].kind === 'done', JSON.stringify(done))
-
-  dismissNotice(done[1].id)
-  check('manual close removes one notice', notices.getSnapshot().length === 1, String(notices.getSnapshot().length))
-
-  timers.run()
-  check('the rest auto-dismisses', notices.getSnapshot().length === 0, JSON.stringify(notices.getSnapshot()))
-}
-
-console.log('\nnotification seeding')
-{
-  const listeners = new Set()
-  const statusMap = new Map([['old', { running: true, pendingInteraction: { kind: 'tool' }, completionUnread: true }]])
-  const uiSession = {
-    sessionStatus: {
-      getSnapshot: () => statusMap,
-      subscribe(listener) {
-        listeners.add(listener)
-        return () => listeners.delete(listener)
-      },
-    },
-  }
-  const { registrations } = boot(
-    async () => ready([{ currency: 'CNY', balance: '1' }]),
-    { byId: { old: { id: 'old', title: '旧会话' } }, ids: ['old'] },
-    uiSession,
-  )
-  await settle()
-  check('pre-existing pending and unread are not replayed', registrations[0].options.inject().notices.getSnapshot().length === 0)
 }
 
 console.log('')
