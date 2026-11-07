@@ -2,6 +2,10 @@
 
 A DeepSeek Harness (dsh) plugin that keeps the account balance, the granted
 balance, and spend statistics in the sidebar, directly above **Settings**.
+It also tracks advisory daily/monthly budgets, estimates how many days the
+balance will last, switches the display currency, pops bottom-left notices for
+pending confirmations and finished sessions, and can export or restore the local
+ledger.
 
 ```
 ┌─────────────────────────┐
@@ -17,11 +21,15 @@ Clicking the row opens a detail panel:
 
 ```
 ┌──────────────────────────────┐
-│ 余额与消耗              [刷新] │
+│ 余额与消耗         [设置][刷新] │
 │ 余额                 ¥10.34   │
 │ 赠送余额              ¥2.00   │
+│ 可用天数              约 8 天 │
 │ ──────────────────────────── │
 │ 今日消耗              ¥1.23   │
+│ ¥1.23 / ¥5.00          25%   │
+│ ▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░  │
+│ 本月消耗             ¥12.40   │
 │ 本次会话              ¥0.45   │
 │ ──────────────────────────── │
 │ 近 7 天                       │
@@ -44,7 +52,17 @@ Clicking the row opens a detail panel:
   (`bonus_wallets`), formatted the way Platform's own account page does
   (`¥0.00`, `<¥0.01`, grouped thousands, truncated sub-cent precision).
 - **Today's spend** in the row; per-day, per-session, and per-task figures in
-  the panel, plus a 7-day strip.
+  the panel, plus a 7-day strip and a running month total.
+- **Budgets** (daily and monthly, per display currency) with a progress bar;
+  over-budget figures turn red in both the panel and the row.
+- **Runway**: available balance divided by the average spend of the days that
+  actually spent money in the last seven complete days, shown as an
+  approximate number of days (five spending days totalling ¥4 means ¥0.80/day).
+- **Currency switch** in Settings: auto (first wallet) or any currency the
+  account currently holds; budgets are kept per currency.
+- **Notices**: a bottom-left toast appears when a session needs confirmation
+  (approval, question, plan review) or a background session finishes. Each
+  toast can be closed by hand and disappears on its own after five seconds.
 - In the collapsed rail the row becomes a currency glyph whose tooltip carries
   the figures; the panel still opens from it.
 
@@ -77,9 +95,12 @@ most recently started one, and a Platform charge that lands more than 20 s after
 a run ends is no longer attributed to it.
 
 The refresh triggers are unchanged: startup, every finished task, credential
-changes, the page becoming visible, a 30 s poll, and the panel's refresh button.
-A finished task additionally re-reads at +1.5 s, +5 s, and +12 s so settlement
-is attributed to it.
+changes, the page becoming visible, the configured poll, and the panel's refresh
+button. The poll interval is selectable in Settings (15 s / 30 s / 60 s) or can
+be paused; pausing stops the timer and the visibility refresh, while manual
+refreshes and the post-task settlement reads still run. A finished task
+additionally re-reads at +1.5 s, +5 s, and +12 s so settlement is attributed to
+it.
 
 ## Storage
 
@@ -95,6 +116,55 @@ The ledger lives in the page's `localStorage` under
 | `unattributed` | spend with no run to charge |
 
 Deleting that key resets the statistics. The ledger never leaves the machine.
+
+Preferences live under `dsh-balance-chip/settings/v1`:
+
+| Field | Contents |
+|---|---|
+| `budgets.daily` | daily budget per currency, e.g. `{ "CNY": 5 }` |
+| `budgets.monthly` | monthly budget per currency |
+| `refreshMs` | poll interval: `15000`, `30000`, `60000`, or `0` (paused) |
+| `currency` | explicit display currency, or `null` for the first wallet |
+
+Both keys are sanitized on read: unknown versions, malformed budgets, and
+unlisted intervals fall back to defaults instead of breaking the row.
+
+## Budgets, runway, and backups
+
+The panel's **设置** tab edits the display currency, budgets, and the refresh
+interval, and holds the local data tools:
+
+- **Export JSON** downloads `dsh-balance-chip-YYYY-MM-DD.json`, containing the
+  ledger and preferences. Use it to move statistics between machines or to keep
+  a snapshot before clearing.
+- **Export CSV** downloads `dsh-balance-chip-YYYY-MM-DD.csv`
+  (`date,currency,spend`, UTF-8 BOM) for spreadsheets.
+- **Import JSON** replaces the current ledger with a backup. Invalid or
+  unsupported files are rejected without touching the existing data.
+- **Clear local stats** wipes the ledger after a second confirming click and
+  keeps the budgets.
+
+Budgets are advisory: they never block a run and never call the network. The
+runway uses seven complete days so a half-finished day cannot skew the
+estimate, then divides the window total by the number of days that actually
+spent something — a week with five spending days and ¥4 total burns ¥0.80/day.
+When the past week has no spend it falls back to the last seven days including
+today, and shows `—` when there is nothing to average.
+
+## Notices
+
+The plugin mirrors the Host's session status projection (`uiSession`) and shows
+a toast in the bottom-left corner for two events:
+
+- **待确认** — a session gained a pending interaction: an approval, a user
+  question, or a plan review. Pending interactions in the session you are
+  already viewing are skipped, because the card is on screen.
+- **会话完成** — a background session finished while you were looking
+  elsewhere (`completionUnread`).
+
+Each toast names the session, can be dismissed with its ×, and closes itself
+after five seconds. At most three stack at once; notices never call the network
+and are not persisted.
 
 ## Install
 
@@ -137,15 +207,17 @@ Both halves are plain JavaScript with no build step:
 - `lib/client.js` — lazy-CJS browser bundle
   (`window.__ModuleLoader__.load({ id, factory })`).
 
-An offline check drives `apply`, slot registration, the row, the panel, and the
-spend ledger with stubbed `window`/`document`/React, so formatting, attribution,
-and state paths are verifiable without a browser:
+An offline check drives `apply`, slot registration, the row, the panel, the
+settings form, the ledger, budgets, runway, currency selection, notices, and
+CSV/JSON round-trips with stubbed `window`/`document`/React, so formatting,
+attribution, and state paths are verifiable without a browser:
 
 ```sh
-ELECTRON_RUN_AS_NODE=1 \
-  "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness" \
-  scripts/check.mjs
+node scripts/check.mjs
 ```
+
+`ELECTRON_RUN_AS_NODE=1 "<app>" scripts/check.mjs` still works if Node is not
+installed separately.
 
 Rebuild-free edits still need the client bundle re-served: toggle the plugin on
 the Plugins page (or reload the page). The profile installs the source tree with
